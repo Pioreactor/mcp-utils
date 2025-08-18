@@ -4,6 +4,7 @@ import json
 from queue import Empty, Queue
 from typing import Any
 
+import msgspec
 import pytest
 
 from mcp_utils.core import MCPServer, get_page_of_items
@@ -34,7 +35,7 @@ class TestResponseQueue(ResponseQueueProtocol):
     def push_response(self, session_id: str, response: MCPResponse) -> None:
         if session_id not in self.queues:
             self.queues[session_id] = Queue()
-        self.queues[session_id].put(response.model_dump_json())
+        self.queues[session_id].put(msgspec.json.encode(response).decode())
 
     def wait_for_response(
         self, session_id: str, timeout: float | None = None

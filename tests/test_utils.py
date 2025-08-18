@@ -1,6 +1,7 @@
+from dataclasses import MISSING, fields
 from typing import Any
 
-from pydantic import BaseModel
+import msgspec
 
 from mcp_utils.utils import inspect_callable
 
@@ -43,82 +44,82 @@ class DemoClass:
 def test_inspect_no_args():
     metadata = inspect_callable(func_no_args)
     assert isinstance(metadata.arg_model, type)
-    assert issubclass(metadata.arg_model, BaseModel)
-    assert len(metadata.arg_model.model_fields) == 0
+    assert issubclass(metadata.arg_model, msgspec.Struct)
+    assert len(metadata.arg_model.__annotations__) == 0
     assert metadata.return_type is str
 
 
 def test_inspect_with_args():
     metadata = inspect_callable(func_with_args)
     assert isinstance(metadata.arg_model, type)
-    assert issubclass(metadata.arg_model, BaseModel)
-    assert set(metadata.arg_model.model_fields.keys()) == {"name", "age"}
-    fields = metadata.arg_model.model_fields
-    assert fields["name"].annotation is str
-    assert fields["age"].annotation is int
+    assert issubclass(metadata.arg_model, msgspec.Struct)
+    assert set(metadata.arg_model.__annotations__.keys()) == {"name", "age"}
+    ann = metadata.arg_model.__annotations__
+    assert ann["name"] is str
+    assert ann["age"] is int
     assert metadata.return_type is str
 
 
 def test_inspect_with_default_args():
     metadata = inspect_callable(func_with_default_args)
     assert isinstance(metadata.arg_model, type)
-    assert issubclass(metadata.arg_model, BaseModel)
-    fields = metadata.arg_model.model_fields
-    assert fields["name"].is_required()  # required field
-    assert fields["age"].default == 30  # optional field with default
+    assert issubclass(metadata.arg_model, msgspec.Struct)
+    f = {f.name: f for f in fields(metadata.arg_model)}
+    assert f["name"].default is MISSING
+    assert f["age"].default == 30
     assert metadata.return_type is str
 
 
 def test_inspect_with_optional():
     metadata = inspect_callable(func_with_optional)
     assert isinstance(metadata.arg_model, type)
-    assert issubclass(metadata.arg_model, BaseModel)
-    fields = metadata.arg_model.model_fields
-    assert fields["name"].default is None
+    assert issubclass(metadata.arg_model, msgspec.Struct)
+    f = {f.name: f for f in fields(metadata.arg_model)}
+    assert f["name"].default is None
     assert metadata.return_type is str
 
 
 def test_inspect_with_complex_types():
     metadata = inspect_callable(func_with_complex_types)
     assert isinstance(metadata.arg_model, type)
-    assert issubclass(metadata.arg_model, BaseModel)
-    fields = metadata.arg_model.model_fields
-    assert fields["items"].is_required()  # required field
-    assert fields["config"].default is None  # optional field
+    assert issubclass(metadata.arg_model, msgspec.Struct)
+    f = {f.name: f for f in fields(metadata.arg_model)}
+    assert f["items"].default is MISSING
+    assert f["config"].default is None
 
 
 def test_inspect_method():
     demo = DemoClass()
     metadata = inspect_callable(demo.method_with_self)
     assert isinstance(metadata.arg_model, type)
-    assert issubclass(metadata.arg_model, BaseModel)
-    assert set(metadata.arg_model.model_fields.keys()) == {"name"}
+    assert issubclass(metadata.arg_model, msgspec.Struct)
+    assert set(metadata.arg_model.__annotations__.keys()) == {"name"}
     assert metadata.return_type is str
 
 
 def test_inspect_classmethod():
     metadata = inspect_callable(DemoClass.class_method)
     assert isinstance(metadata.arg_model, type)
-    assert issubclass(metadata.arg_model, BaseModel)
-    assert set(metadata.arg_model.model_fields.keys()) == {"value"}
-    fields = metadata.arg_model.model_fields
-    assert fields["value"].annotation is int
+    assert issubclass(metadata.arg_model, msgspec.Struct)
+    assert set(metadata.arg_model.__annotations__.keys()) == {"value"}
+    ann = metadata.arg_model.__annotations__
+    assert ann["value"] is int
     assert metadata.return_type is int
 
 
 def test_inspect_staticmethod():
     metadata = inspect_callable(DemoClass.static_method)
     assert isinstance(metadata.arg_model, type)
-    assert issubclass(metadata.arg_model, BaseModel)
-    assert set(metadata.arg_model.model_fields.keys()) == {"value"}
-    fields = metadata.arg_model.model_fields
-    assert fields["value"].annotation is float
+    assert issubclass(metadata.arg_model, msgspec.Struct)
+    assert set(metadata.arg_model.__annotations__.keys()) == {"value"}
+    ann = metadata.arg_model.__annotations__
+    assert ann["value"] is float
     assert metadata.return_type is float
 
 
 def test_inspect_with_skip_names():
     metadata = inspect_callable(func_with_args, skip_names=["age"])
     assert isinstance(metadata.arg_model, type)
-    assert issubclass(metadata.arg_model, BaseModel)
-    assert set(metadata.arg_model.model_fields.keys()) == {"name"}
+    assert issubclass(metadata.arg_model, msgspec.Struct)
+    assert set(metadata.arg_model.__annotations__.keys()) == {"name"}
     assert metadata.return_type is str
