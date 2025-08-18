@@ -5,6 +5,8 @@ Queue implementation for MCP responses
 import logging
 from typing import Protocol
 
+import msgspec
+
 from .schema import MCPResponse
 
 logger = logging.getLogger("mcp_utils")
@@ -58,7 +60,7 @@ class RedisResponseQueue(ResponseQueueProtocol):
             response: The response to push
         """
         queue_key = self._get_queue_key(session_id)
-        value = response.model_dump_json(exclude_none=True)
+        value = msgspec.json.encode(response, skip_defaults=True).decode()
         logger.debug(f"Redis: Saving response for session: {session_id}: {value}")
         self.redis.rpush(queue_key, value)
 

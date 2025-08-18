@@ -2,6 +2,7 @@
 
 import json
 
+import msgspec
 import pytest
 
 from mcp_utils.schema import (
@@ -45,10 +46,10 @@ def test_annotations():
     assert annotations.priority == 0.5
 
     # Test JSON serialization
-    assert json.loads(annotations.model_dump_json()) == data
+    assert json.loads(msgspec.json.encode(annotations)) == data
 
     # Test validation
-    with pytest.raises(ValueError):
+    with pytest.raises(msgspec.ValidationError):
         Annotations(priority=1.5)  # priority must be <= 1
 
 
@@ -65,7 +66,7 @@ def test_blob_resource_contents():
     assert resource.uri == "https://example.com/resource"
 
     # Test JSON serialization with aliases
-    json_data = json.loads(resource.model_dump_json(by_alias=True))
+    json_data = json.loads(msgspec.json.encode(resource))
     assert json_data["mimeType"] == "text/plain"  # Check alias works
     assert json_data["uri"] == "https://example.com/resource"
 
@@ -75,7 +76,7 @@ def test_content_types():
     # Test TextContent
     text = TextContent(text="Hello")
     assert text.type == "text"
-    assert json.loads(text.model_dump_json()) == {"text": "Hello", "type": "text"}
+    assert json.loads(msgspec.json.encode(text)) == {"text": "Hello", "type": "text"}
 
     # Test ImageContent
     image_data = {
@@ -88,7 +89,7 @@ def test_content_types():
     }
     image = ImageContent(**image_data)
     assert image.type == "image"
-    assert json.loads(image.model_dump_json(by_alias=True)) == image_data
+    assert json.loads(msgspec.json.encode(image)) == image_data
 
 
 def test_call_tool_request():
@@ -102,7 +103,7 @@ def test_call_tool_request():
     assert request.params == {"name": "test_tool", "args": {"key": "value"}}
 
     # Test JSON serialization
-    assert json.loads(request.model_dump_json()) == data
+    assert json.loads(msgspec.json.encode(request)) == data
 
 
 def test_call_tool_result():
@@ -117,7 +118,7 @@ def test_call_tool_result():
     assert not result.is_error
 
     # Test JSON serialization with aliases
-    json_data = json.loads(result.model_dump_json(by_alias=True))
+    json_data = json.loads(msgspec.json.encode(result))
     assert json_data["isError"] is False  # Check alias works
     assert json_data["content"][0] == {"text": "Hello", "type": "text"}
 
@@ -152,11 +153,11 @@ def test_mcp_response():
     assert error_response.error.message == "Test error"
 
     # Test JSON serialization
-    json_data = json.loads(error_response.model_dump_json(exclude_none=True))
+    json_data = json.loads(msgspec.json.encode(error_response, skip_defaults=True))
     assert json_data == error_data
 
     # Test extra fields are forbidden
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         MCPResponse(**{**success_data, "extra": "field"})
 
 
@@ -175,7 +176,7 @@ def test_mcp_request():
     assert request.params == {"key": "value"}
 
     # Test JSON serialization
-    assert json.loads(request.model_dump_json()) == data
+    assert json.loads(msgspec.json.encode(request)) == data
 
 
 def test_message():
@@ -203,7 +204,7 @@ def test_message():
     assert isinstance(image_msg.content, ImageContent)
 
     # Test JSON serialization
-    json_data = json.loads(image_msg.model_dump_json(by_alias=True))
+    json_data = json.loads(msgspec.json.encode(image_msg))
     assert json_data["role"] == "assistant"
     assert json_data["content"]["type"] == "image"
     assert json_data["content"]["image"]["mimeType"] == "image/png"
@@ -224,7 +225,7 @@ def test_resource_info():
     assert resource.mime_type == "text/plain"
 
     # Test JSON serialization
-    json_data = json.loads(resource.model_dump_json())
+    json_data = json.loads(msgspec.json.encode(resource))
     assert json_data["mime_type"] == "text/plain"  # No alias for this field
 
 
@@ -247,7 +248,7 @@ def test_tool_info():
     }
 
     # Test JSON serialization
-    json_data = json.loads(tool.model_dump_json(by_alias=True))
+    json_data = json.loads(msgspec.json.encode(tool))
     assert "arg_model" not in json_data  # Should be excluded
     assert json_data["inputSchema"] == data["inputSchema"]
 
@@ -265,7 +266,7 @@ def test_error_response():
     assert error.data == {"detail": "More info"}
 
     # Test JSON serialization
-    assert json.loads(error.model_dump_json(exclude_none=True)) == data
+    assert json.loads(msgspec.json.encode(error, skip_defaults=True)) == data
 
 
 def test_server_info():
@@ -279,7 +280,7 @@ def test_server_info():
     assert server.version == "1.0.0"
 
     # Test JSON serialization
-    assert json.loads(server.model_dump_json()) == data
+    assert json.loads(msgspec.json.encode(server)) == data
 
 
 def test_initialize_request():
@@ -293,7 +294,7 @@ def test_initialize_request():
     assert request.params["clientInfo"]["name"] == "test-client"
 
     # Test JSON serialization
-    assert json.loads(request.model_dump_json()) == data
+    assert json.loads(msgspec.json.encode(request)) == data
 
 
 def test_nested_model_serialization():
@@ -324,5 +325,5 @@ def test_nested_model_serialization():
     response.result = result
 
     # Test JSON serialization of the entire structure
-    json_data = json.loads(response.model_dump_json(by_alias=True, exclude_none=True))
+    json_data = json.loads(msgspec.json.encode(response, skip_defaults=True))
     assert json_data == data  # Should match the original structure exactly

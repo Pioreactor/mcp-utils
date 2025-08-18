@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
-from pydantic import ValidationError
+import msgspec
 
 from .queue import ResponseQueueProtocol
 from .schema import (
@@ -420,8 +420,8 @@ class MCPServer:
         try:
             callable = self._tools[tool_name]
             arg_model = self._tools_list[tool_name].arg_model
-            args = arg_model(**kwargs)
-            result = callable(**dict(args))
+            args = msgspec.convert(kwargs, arg_model)
+            result = callable(**msgspec.to_builtins(args))
             if isinstance(result, dict):
                 result = CallToolResult(
                     content=[
@@ -465,7 +465,7 @@ class MCPServer:
                     message="Tool not found",
                 ),
             )
-        except ValidationError as e:
+        except msgspec.ValidationError as e:
             return MCPResponse(
                 id=request.id,
                 error=ErrorResponse(
@@ -508,10 +508,8 @@ class MCPServer:
                 ),
             )
         try:
-            mcp_request = MCPRequest.model_validate(
-                {**message, "session_id": session_id},
-            )
-        except ValidationError as e:
+            mcp_request = msgspec.convert(message, MCPRequest)
+        except msgspec.ValidationError as e:
             return MCPResponse(
                 id=0,
                 error=ErrorResponse(
