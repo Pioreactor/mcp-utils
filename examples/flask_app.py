@@ -1,25 +1,26 @@
 """
 Example Flask application implementing an MCP server.
 
-`pip install mcp-utils flask gunicorn redis`
+`pip install mcp-utils flask gunicorn`
 
-* Needs Redis to be running
-* Needs Gunicorn to be installed
-
-In addition to the requirements for the simple example, this example also:
+This example also:
 
 * Demonstrates logging setup
 * Demonstrates session management
 * Demonstrates SSE stream handling
+
+Uses the built-in SQLite-backed response queue.
 """
 
 import logging
 import sys
 
 from flask import Flask, jsonify, request
+import msgspec
 from gunicorn.app.base import BaseApplication
 
 from mcp_utils.core import MCPServer
+from mcp_utils.queue import SQLiteResponseQueue
 from mcp_utils.schema import (
     CallToolResult,
     CompletionValues,
@@ -29,14 +30,14 @@ from mcp_utils.schema import (
 )
 
 app = Flask(__name__)
-mcp = MCPServer("weather", "1.0")
+mcp = MCPServer("weather", "1.0", response_queue=SQLiteResponseQueue("responses.db"))
 
 logger = logging.getLogger("mcp_utils")
 logger.setLevel(logging.DEBUG)
 
 
 @mcp.tool()
-def get_weather(city: str) -> CallToolResult:
+def get_weather(city: str) -> str:
     return "sunny"
 
 
@@ -80,7 +81,8 @@ def get_cities(city_name: str) -> CompletionValues:
 @app.route("/mcp", methods=["POST"])
 def mcp_route():
     response = mcp.handle_message(request.get_json())
-    return jsonify(response.model_dump(exclude_none=True))
+    # Convert msgspec Struct to builtin types for jsonify
+    return jsonify(msgspec.to_builtins(response))
 
 
 class FlaskApplication(BaseApplication):

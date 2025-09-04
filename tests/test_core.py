@@ -470,3 +470,19 @@ def test_pagination_helper() -> None:
     page_items, next_page = get_page_of_items(items, page=0, page_size=3)
     assert page_items == []
     assert next_page == "1"
+
+
+def test_notifications_initialized_is_ignored(server: MCPServer) -> None:
+    """Server ignores `notifications/initialized` and queues no response."""
+    session_id = server.generate_session_id()
+    message = {
+        "jsonrpc": "2.0",
+        "id": "init-1",
+        "method": "notifications/initialized",
+        "params": None,
+    }
+
+    rv = server.handle_message(message, session_id=session_id)
+    assert rv is None
+    # No response should be queued for notifications
+    assert server.wait_for_queued_response(session_id, timeout=0.1) is None

@@ -510,17 +510,6 @@ class MCPServer:
         self, message: dict, session_id: str | None = None
     ) -> MCPResponse | None:
         try:
-            message_id = message["id"]
-        except KeyError:
-            return MCPResponse(
-                jsonrpc="2.0",
-                id=0,
-                error=ErrorResponse(
-                    code=-32600,
-                    message="Missing message id",
-                ),
-            )
-        try:
             mcp_request = msgspec.convert({**message}, MCPRequest)
         except Exception as e:
             return MCPResponse(
@@ -556,6 +545,7 @@ class MCPServer:
         if handler := handlers.get(mcp_request.method):
             return handler(mcp_request)
         else:
+            message_id = message["id"]
             return MCPResponse(
                 jsonrpc="2.0",
                 id=message_id,

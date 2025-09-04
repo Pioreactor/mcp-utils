@@ -6,32 +6,6 @@ A Python utility package for building Model Context Protocol (MCP) servers.
 
 
 
-## Table of Contents
-
-- [mcp-utils](#mcp-utils)
-  - [Table of Contents](#table-of-contents)
-  - [Overview](#overview)
-  - [Key Features](#key-features)
-  - [Installation](#installation)
-  - [Requirements](#requirements)
-    - [Optional Dependencies](#optional-dependencies)
-  - [Usage](#usage)
-    - [Basic MCP Server](#basic-mcp-server)
-    - [Flask Example](#flask-example)
-    - [SQLAlchemy Transaction Handling Example](#sqlalchemy-transaction-handling-example)
-    - [Running with Gunicorn](#running-with-gunicorn)
-  - [Connecting with MCP Clients](#connecting-with-mcp-clients)
-    - [Cursor](#cursor)
-    - [Claude Desktop](#claude-desktop)
-      - [Installing via Smithery](#installing-via-smithery)
-      - [Installing via PyPI](#installing-via-pypi)
-  - [Contributing](#contributing)
-  - [Related Projects](#related-projects)
-  - [License](#license)
-  - [Testing with MCP Inspector](#testing-with-mcp-inspector)
-    - [Installation](#installation-1)
-    - [Usage](#usage-1)
-
 ## Overview
 
 `mcp-utils` provides utilities and helpers for building MCP-compliant servers in Python, with a focus on synchronous implementations using Flask. This package is designed for developers who want to implement MCP servers in their existing Python applications without the complexity of asynchronous code.
@@ -43,39 +17,37 @@ A Python utility package for building Model Context Protocol (MCP) servers.
 - Simple decorators for MCP endpoints
 - Synchronous implementation
 - HTTP protocol support
-- Redis response queue
-- Comprehensive Pydantic models for MCP schema
+- SQLite response queue
+- Comprehensive msgspec models for MCP schema
 - Built-in validation and documentation
 
 ## Installation
 
-```bash
-pip install mcp-utils
-```
+Install from this repo
 
 ## Requirements
 
 - Python 3.10+
-- Pydantic 2
+- msgspec >= 0.18
 
 ### Optional Dependencies
 
 - Flask (for web server)
-- Gunicorn (for production deployment)
-- Redis (for response queue)
+
 
 ## Usage
 
 ### Basic MCP Server
 
-Here's a simple example of creating an MCP server:
+Here's a simple example of creating an MCP server (using the built-in SQLite queue):
 
 ```python
 from mcp_utils.core import MCPServer
+from mcp_utils.queue import SQLiteResponseQueue
 from mcp_utils.schema import GetPromptResult, Message, TextContent, CallToolResult
 
-# Create a basic MCP server
-mcp = MCPServer("example", "1.0")
+# Create a basic MCP server with SQLite-backed queue
+mcp = MCPServer("example", "1.0", response_queue=SQLiteResponseQueue("responses.db"))
 
 @mcp.prompt()
 def get_weather_prompt(city: str) -> GetPromptResult:
@@ -104,55 +76,20 @@ from version 2025-06-18.
 
 
 ```python
-from flask import Flask, Response, url_for, request
+from flask import Flask, jsonify, request
+import msgspec
+from mcp_utils.core import MCPServer
+from mcp_utils.queue import SQLiteResponseQueue
 
-# Create Flask app and MCP server with Redis queue
+# Create Flask app and MCP server with SQLite-backed queue
 app = Flask(__name__)
-mcp = MCPServer(
-    "example",
-    "1.0",
-)
+mcp = MCPServer("example", "1.0", response_queue=SQLiteResponseQueue("responses.db"))
 
 @app.route("/mcp", methods=["POST"])
 def mcp_route():
     response = mcp.handle_message(request.get_json())
-    return jsonify(response.model_dump(exclude_none=True))
-
-
-if __name__ == "__main__":
-    app.run(debug=True)
-```
-
-### SQLAlchemy Transaction Handling Example
-
-For production use, you can integrate the MCP server with Flask, Redis, and SQLAlchemy for better message handling and database transaction management:
-
-```python
-from flask import Flask, request
-from sqlalchemy.orm import Session
-from sqlalchemy import create_engine
-
-# Create engine for PostgreSQL database
-engine = create_engine("postgresql://user:pass@localhost/dbname")
-
-# Create Flask app and MCP server with Redis queue
-app = Flask(__name__)
-mcp = MCPServer(
-    "example",
-    "1.0",
-)
-
-@app.route("/mcp", methods=["POST"])
-def mcp_route():
-    with Session(engine) as session:
-        try:
-            response = mcp.handle_message(request.get_json())
-            session.commit()
-        except:
-            session.rollback()
-            raise
-        else:
-            return jsonify(response.model_dump(exclude_none=True))
+    # Convert msgspec Struct to builtin types for jsonify
+    return jsonify(msgspec.to_builtins(response))
 
 
 if __name__ == "__main__":
@@ -201,69 +138,13 @@ if __name__ == "__main__":
     FlaskApplication(app, options).run()
 ```
 
-## Connecting with MCP Clients
 
-### Cursor
-
-* Edit MCP settings and add to configuration
-
-```json
-{
-  "mcpServers": {
-    "server-name": {
-      "url": "http://localhost:9000/mcp"
-    }
-  }
-}
-```
-
-### Claude Desktop
-
-As of this writing, Claude Desktop does not support MCP through SSE and only supports stdio. To connect Claude Desktop with an MCP server, you'll need to use [mcp-proxy](https://github.com/sparfenyuk/mcp-proxy).
-
-Configuration example for Claude Desktop:
-
-```json
-{
-  "mcpServers": {
-    "weather": {
-      "command": "/Users/yourname/.local/bin/mcp-proxy",
-      "args": ["http://127.0.0.1:9000/sse"]
-    }
-  }
-}
-```
-
-#### Installing via Smithery
-
-To install MCP Proxy for Claude Desktop automatically via [Smithery](https://smithery.ai/server/mcp-proxy):
-
-```bash
-npx -y @smithery/cli install mcp-proxy --client claude
-```
-
-#### Installing via PyPI
-
-The stable version of the package is available on the PyPI repository. You can install it using the following command:
-
-```bash
-# Option 1: With uv (recommended)
-uv tool install mcp-proxy
-
-# Option 2: With pipx (alternative)
-pipx install mcp-proxy
-```
-
-Once installed, you can run the server using the `mcp-proxy` command.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Related Projects
 
 - [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) - The official async Python SDK for MCP
 - [mcp-proxy](https://github.com/sparfenyuk/mcp-proxy) - A proxy tool to connect Claude Desktop with MCP servers
+- [mcp-utils](https://github.com/fulfilio/mcp-utils) -  Original version with Pydantic support
 
 ## License
 
