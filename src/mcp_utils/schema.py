@@ -1,11 +1,11 @@
-"""Pydantic models for MCP (Model Context Protocol) schema."""
+"""msgspec models for MCP (Model Context Protocol) schema."""
 
 import logging
 from collections.abc import Callable
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel
+import msgspec
 
 from .utils import inspect_callable
 
@@ -20,160 +20,153 @@ class Role(str, Enum):
     SYSTEM = "system"
 
 
-class Annotations(BaseModel):
+class Annotations(msgspec.Struct):
     """Annotations for MCP objects."""
 
-    audience: list[Role] | None = Field(
-        None,
-        description="Describes who the intended customer of this object or data is.",
-    )
-    priority: float | None = Field(
-        None,
-        description="Describes how important this data is for operating the server.",
-        ge=0,
-        le=1,
-    )
+    audience: list[Role] | None = None
+    # Range constraints will be added via msgspec.Meta in a later pass
+    priority: float | None = None
 
 
-class Annotated(BaseModel):
+class Annotated(msgspec.Struct):
     """Base for objects that include optional annotations for the client."""
 
     annotations: Annotations | None = None
 
 
-class BlobResourceContents(BaseModel):
+class BlobResourceContents(msgspec.Struct):
     """Contents of a blob resource."""
 
-    blob: str = Field(
-        ...,
-        json_schema_extra={"format": "byte"},
-    )
-    mime_type: str | None = Field(None, alias="mimeType")
-    uri: str = Field(
-        ...,
-        json_schema_extra={"format": "uri"},
-    )
+    blob: str
+    uri: str
+    mime_type: str | None = msgspec.field(default=None, name="mimeType")
 
 
-class ToolArguments(RootModel):
-    """Arguments for a tool call."""
-
-    root: dict[str, Any]
+## Removed Pydantic RootModel helper
 
 
-class TextContent(BaseModel):
+class TextContent(msgspec.Struct, tag="text", tag_field="type"):
     """Text content in MCP."""
 
     text: str
-    type: str = Field("text")
+
+    @property
+    def type(self) -> str:  # for test compatibility
+        return "text"
 
 
-class ImageContent(BaseModel):
+class ImageContent(msgspec.Struct, tag="image", tag_field="type"):
     """Image content in MCP."""
 
     image: BlobResourceContents
-    type: str = Field("image")
+
+    @property
+    def type(self) -> str:  # for test compatibility
+        return "image"
 
 
-class EmbeddedResource(BaseModel):
+class EmbeddedResource(msgspec.Struct, tag="embedded-resource", tag_field="type"):
     """Embedded resource content in MCP."""
 
     resource: BlobResourceContents
-    type: str = Field("embedded-resource")
+
+    @property
+    def type(self) -> str:  # for test compatibility
+        return "embedded-resource"
 
 
-class CallToolRequest(BaseModel):
+class CallToolRequest(msgspec.Struct):
     """Request to invoke a tool provided by the server."""
 
     method: Literal["tools/call"]
-    params: dict[str, Any] = Field(...)
+    params: dict[str, Any]
 
 
-class CallToolResult(BaseModel):
+class CallToolResult(msgspec.Struct, omit_defaults=True):
     """The server's response to a tool call."""
 
+    content: list[TextContent | ImageContent | EmbeddedResource]
+    is_error: bool = msgspec.field(default=False, name="isError")
     _meta: dict[str, Any] | None = None
-    content: list[TextContent | ImageContent | EmbeddedResource] = Field(...)
-    is_error: bool = Field(False, alias="isError")
 
 
-class CancelledNotification(BaseModel):
+class CancelledNotification(msgspec.Struct):
     """Notification for cancelling a previously-issued request."""
 
     method: Literal["notifications/cancelled"]
-    params: dict[str, Any] = Field(...)
+    params: dict[str, Any]
 
 
-class ClientCapabilities(BaseModel):
+class ClientCapabilities(msgspec.Struct):
     """Capabilities a client may support."""
 
-    experimental: dict[str, dict[str, Any]] | None = None
-    roots: dict[str, bool] | None = None
-    sampling: dict[str, Any] | None = None
-    prompts: dict[str, bool] | None = None
-    resources: dict[str, bool] | None = None
-    tools: dict[str, bool] | None = None
-    logging: dict[str, bool] | None = None
+    experimental: dict[str, dict[str, Any]] | None | msgspec.UnsetType = msgspec.UNSET
+    roots: dict[str, bool] | None | msgspec.UnsetType = msgspec.UNSET
+    sampling: dict[str, Any] | None | msgspec.UnsetType  = msgspec.UNSET
+    prompts: dict[str, bool] | None | msgspec.UnsetType = msgspec.UNSET
+    resources: dict[str, bool] | None | msgspec.UnsetType = msgspec.UNSET
+    tools: dict[str, bool] | None | msgspec.UnsetType = msgspec.UNSET
+    logging: dict[str, bool] | None | msgspec.UnsetType = msgspec.UNSET
 
 
-class CompleteRequestArgument(BaseModel):
+class CompleteRequestArgument(msgspec.Struct):
     """Argument information for completion request."""
 
     name: str
     value: str
 
 
-class CompleteRequest(BaseModel):
+class CompleteRequest(msgspec.Struct):
     """Request for completion options."""
 
     method: Literal["completion/complete"]
-    params: dict[str, Any] = Field(...)
+    params: dict[str, Any]
 
 
-class CompletionValues(BaseModel):
+class CompletionValues(msgspec.Struct):
     """Completion values response."""
 
-    has_more: bool | None = Field(None, alias="hasMore")
+    values: list[str]
+    has_more: bool | None = msgspec.field(default=None, name="hasMore")
     total: int | None = None
-    values: list[str] = Field(..., max_length=100)
 
 
-class CompleteResult(BaseModel):
+class CompleteResult(msgspec.Struct, omit_defaults=True):
     """Response to a completion request."""
 
-    _meta: dict[str, Any] | None = None
     completion: CompletionValues
+    _meta: dict[str, Any] | None = None
 
 
-class ResourceReference(BaseModel):
+class ResourceReference(msgspec.Struct):
     """Reference to a resource."""
 
-    type: str = Field("resource")
     id: str
+    type: str = "resource"
 
 
-class PromptReference(BaseModel):
+class PromptReference(msgspec.Struct):
     """Reference to a prompt."""
 
-    type: str = Field("prompt")
     id: str
+    type: str = "prompt"
 
 
-class InitializeRequest(BaseModel):
+class InitializeRequest(msgspec.Struct):
     """Request to initialize the MCP connection."""
 
     method: Literal["initialize"]
-    params: dict[str, Any] = Field(...)
+    params: dict[str, Any]
 
 
-class ServerInfo(BaseModel):
+class ServerInfo(msgspec.Struct):
     """Information about the server."""
 
     name: str
     version: str
 
 
-class InitializeResult(BaseModel):
+class InitializeResult(msgspec.Struct):
     """Result of initialization request."""
 
     protocolVersion: str
@@ -181,14 +174,14 @@ class InitializeResult(BaseModel):
     serverInfo: ServerInfo
 
 
-class ListResourcesRequest(BaseModel):
+class ListResourcesRequest(msgspec.Struct):
     """Request to list available resources."""
 
     method: Literal["resources/list"]
     params: dict[str, Any] | None = None
 
 
-class ResourceInfo(BaseModel):
+class ResourceInfo(msgspec.Struct):
     """Information about a resource."""
 
     uri: str
@@ -206,14 +199,14 @@ class ResourceInfo(BaseModel):
         )
 
 
-class ListResourcesResult(BaseModel):
+class ListResourcesResult(msgspec.Struct):
     """Result of listing resources."""
 
     resources: list[ResourceInfo]
-    nextCursor: str | None = None
+    nextCursor: str | None | msgspec.UnsetType = msgspec.UNSET
 
 
-class ResourceTemplateInfo(BaseModel):
+class ResourceTemplateInfo(msgspec.Struct):
     """Information about a resource template.
 
     https://spec.modelcontextprotocol.io/specification/2024-11-05/server/resources/#resource-templates
@@ -236,35 +229,35 @@ class ResourceTemplateInfo(BaseModel):
         )
 
 
-class ListResourceTemplateResult(BaseModel):
+class ListResourceTemplateResult(msgspec.Struct):
     """Result of listing resource templates."""
 
     resourceTemplates: list[ResourceTemplateInfo]
-    nextCursor: str | None = None
+    nextCursor: str | None | msgspec.UnsetType = msgspec.UNSET
 
 
-class ReadResourceRequest(BaseModel):
+class ReadResourceRequest(msgspec.Struct):
     """Request to read a specific resource."""
 
     method: Literal["resources/read"]
-    params: dict[str, Any] = Field(...)
+    params: dict[str, Any]
 
 
-class ReadResourceResult(BaseModel):
+class ReadResourceResult(msgspec.Struct, omit_defaults=True):
     """Result of reading a resource."""
 
-    _meta: dict[str, Any] | None = None
     resource: BlobResourceContents
+    _meta: dict[str, Any] | None = None
 
 
-class ListPromptsRequest(BaseModel):
+class ListPromptsRequest(msgspec.Struct):
     """Request to list available prompts."""
 
     method: Literal["prompts/list"]
     params: dict[str, Any] | None = None
 
 
-class PromptInfo(BaseModel):
+class PromptInfo(msgspec.Struct):
     """Information about a prompt.
 
     See: https://spec.modelcontextprotocol.io/specification/2024-11-05/server/prompts/#listing-prompts
@@ -272,8 +265,8 @@ class PromptInfo(BaseModel):
 
     id: str
     name: str
-    description: str | None = None
     arguments: list[dict[str, Any]]
+    description: str | None = None
 
     @classmethod
     def from_callable(cls, callable: Callable, name: str) -> "PromptInfo":
@@ -281,12 +274,12 @@ class PromptInfo(BaseModel):
         metadata = inspect_callable(callable)
         arguments = []
         if metadata.arg_model:
-            for field_name, field in metadata.arg_model.model_fields.items():
+            for field in msgspec.structs.fields(metadata.arg_model):
                 arguments.append(
                     {
-                        "name": field_name,
-                        "description": field.description or "",
-                        "required": field.is_required(),
+                        "name": field.name,
+                        "description": "",
+                        "required": field.default is msgspec.UNSET,
                     }
                 )
         return cls(
@@ -294,148 +287,149 @@ class PromptInfo(BaseModel):
         )
 
 
-class ListPromptsResult(BaseModel):
+class ListPromptsResult(msgspec.Struct):
     """Result of listing prompts."""
 
     prompts: list[PromptInfo]
-    nextCursor: str | None = None
+    nextCursor: str | None | msgspec.UnsetType = msgspec.UNSET
 
 
-class GetPromptRequest(BaseModel):
+class GetPromptRequest(msgspec.Struct):
     """Request to get a specific prompt."""
 
     method: Literal["prompts/get"]
-    params: dict[str, Any] = Field(...)
+    params: dict[str, Any]
 
 
-class Message(BaseModel):
+class Message(msgspec.Struct):
     """Message in MCP."""
 
     role: Literal["system", "user", "assistant"]
     content: TextContent | ImageContent | EmbeddedResource
 
 
-class GetPromptResult(BaseModel):
+class GetPromptResult(msgspec.Struct, omit_defaults=True):
     """Result of getting a prompt."""
 
-    _meta: dict[str, Any] | None = None
     description: str
     messages: list[Message]
+    _meta: dict[str, Any] | None = None
 
 
-class ListToolsRequest(BaseModel):
+class ListToolsRequest(msgspec.Struct):
     """Request to list available tools."""
 
     method: Literal["tools/list"]
     params: dict[str, Any] | None = None
 
 
-class ToolInfo(BaseModel):
+class ToolInfo(msgspec.Struct, omit_defaults=True):
     """Information about a tool.
 
     See: https://spec.modelcontextprotocol.io/specification/2024-11-05/server/tools/#listing-tools
     """
 
     name: str
+    inputSchema: dict[str, Any]
     description: str | None = None
-    inputSchema: dict[str, Any] = Field(...)
-    arg_model: type[BaseModel] | None = Field(None, exclude=True)
+    arg_model: type[msgspec.Struct] | None | msgspec.UnsetType = msgspec.UNSET
 
     @classmethod
     def from_callable(cls, callable: Callable, name: str) -> "ToolInfo":
         """Create a ToolInfo from a callable."""
         metadata = inspect_callable(callable)
+        # Generate a Pydantic-like schema: root as $ref with $defs components.
+        # Also key the root definition using the tool name for stability.
+
         return cls(
             name=name,
             description=callable.__doc__ or "",
-            inputSchema=metadata.arg_model.model_json_schema(),
-            arg_model=metadata.arg_model,
+            inputSchema=list(msgspec.json.schema_components([metadata.arg_model])[1].values())[0], # f this.
         )
 
 
-class ListToolsResult(BaseModel):
+class ListToolsResult(msgspec.Struct):
     """Result of listing tools."""
 
     tools: list[ToolInfo]
-    nextCursor: str | None = None
+    nextCursor: str | None | msgspec.UnsetType = msgspec.UNSET
 
-
-class SubscribeRequest(BaseModel):
+class SubscribeRequest(msgspec.Struct):
     """Request to subscribe to a resource."""
 
     method: Literal["resources/subscribe"]
-    params: dict[str, Any] = Field(...)
+    params: dict[str, Any]
 
 
-class UnsubscribeRequest(BaseModel):
+class UnsubscribeRequest(msgspec.Struct):
     """Request to unsubscribe from a resource."""
 
     method: Literal["resources/unsubscribe"]
-    params: dict[str, Any] = Field(...)
+    params: dict[str, Any]
 
 
-class SetLevelRequest(BaseModel):
+class SetLevelRequest(msgspec.Struct):
     """Request to set the level of a resource."""
 
     method: Literal["resources/setLevel"]
-    params: dict[str, Any] = Field(...)
+    params: dict[str, Any]
 
 
-class PingRequest(BaseModel):
+class PingRequest(msgspec.Struct):
     """Request to ping the server."""
 
     method: Literal["ping"]
     params: dict[str, Any] | None = None
 
 
-class PingResult(BaseModel):
+class PingResult(msgspec.Struct):
     """Result of ping request."""
 
     _meta: dict[str, Any] | None = None
 
 
-class InitializedNotification(BaseModel):
+class InitializedNotification(msgspec.Struct):
     """Notification that initialization is complete."""
 
     method: Literal["notifications/initialized"]
     params: dict[str, Any] | None = None
 
 
-class ProgressNotification(BaseModel):
+class ProgressNotification(msgspec.Struct):
     """Notification of progress."""
 
     method: Literal["notifications/progress"]
-    params: dict[str, Any] = Field(...)
+    params: dict[str, Any]
 
 
-class RootsListChangedNotification(BaseModel):
+class RootsListChangedNotification(msgspec.Struct):
     """Notification that the roots list has changed."""
 
     method: Literal["notifications/rootsListChanged"]
     params: dict[str, Any] | None = None
 
 
-class CreateMessageRequest(BaseModel):
+class CreateMessageRequest(msgspec.Struct):
     """Request to create a message."""
 
     method: Literal["messages/create"]
-    params: dict[str, Any] = Field(...)
+    params: dict[str, Any]
 
 
-class CreateMessageResult(BaseModel):
+class CreateMessageResult(msgspec.Struct):
     """Result of creating a message."""
 
     message: dict[str, Any]
 
 
-class ListRootsRequest(BaseModel):
+class ListRootsRequest(msgspec.Struct):
     """Request to list roots."""
 
     method: Literal["roots/list"]
     params: dict[str, Any] | None = None
 
 
-class RootInfo(BaseModel):
+class RootInfo(msgspec.Struct):
     """Information about a root."""
 
     id: str
@@ -443,50 +437,43 @@ class RootInfo(BaseModel):
     description: str | None = None
 
 
-class ListRootsResult(BaseModel):
+class ListRootsResult(msgspec.Struct):
     """Result of listing roots."""
 
     roots: list[RootInfo]
-    nextCursor: str | None = None
+    nextCursor: str | None | msgspec.UnsetType = msgspec.UNSET
 
-
-class ErrorResponse(BaseModel):
+class ErrorResponse(msgspec.Struct):
     """Error response in MCP."""
 
-    code: int = Field(None, description="Error code must be an integer")
-    message: str = Field(None, description="Error message describing what went wrong")
-    data: Any | None = Field(None, description="Additional error data if available")
+    code: int | None = None
+    message: str | None = None
+    data: Any | None = None
 
 
-class MCPResponse(BaseModel):
+class MCPResponse(msgspec.Struct, omit_defaults=True):
     """Base response model for MCP responses."""
 
-    model_config = ConfigDict(extra="forbid")
-
-    jsonrpc: Literal["2.0"] = Field("2.0", description="JSON-RPC version")
-    id: str | int = Field(
-        None, description="ID matching the request this response corresponds to"
-    )
-    result: Any | None = Field(None, description="Result of the request if successful")
-    error: ErrorResponse | None = Field(
-        None, description="Error details if request failed"
-    )
+    jsonrpc: Literal["2.0"]
+    id: str | int | None = None
+    result: Any | None = None
+    error: ErrorResponse | None = None
 
     def is_error(self) -> bool:
         """Check if the response contains an error."""
         return self.error is not None
 
 
-class Result(BaseModel):
+class Result(msgspec.Struct):
     """Generic result type."""
 
     _meta: dict[str, Any] | None = None
 
 
-class MCPRequest(BaseModel):
+class MCPRequest(msgspec.Struct):
     """Base request model for MCP requests."""
 
-    jsonrpc: Literal["2.0"] = Field("2.0", description="JSON-RPC version")
-    id: str | int | None = None
     method: str
+    jsonrpc: Literal["2.0"] = "2.0"
+    id: str | int | None = None
     params: dict[str, Any] | None = None

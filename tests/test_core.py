@@ -5,6 +5,7 @@ from queue import Empty, Queue
 from typing import Any
 
 import pytest
+import msgspec
 
 from mcp_utils.core import MCPServer, get_page_of_items
 from mcp_utils.queue import ResponseQueueProtocol
@@ -34,7 +35,12 @@ class TestResponseQueue(ResponseQueueProtocol):
     def push_response(self, session_id: str, response: MCPResponse) -> None:
         if session_id not in self.queues:
             self.queues[session_id] = Queue()
-        self.queues[session_id].put(response.model_dump_json())
+        # Support both pydantic BaseModel and msgspec.Struct during transition
+        if hasattr(response, "model_dump_json"):
+            payload = response.model_dump_json()
+        else:
+            payload = msgspec.json.encode(response).decode()
+        self.queues[session_id].put(payload)
 
     def wait_for_response(
         self, session_id: str, timeout: float | None = None
@@ -285,7 +291,7 @@ def test_list_operations(server: MCPServer) -> None:
     tools_result = server.get_list_tools(page=2, page_size=3)
     assert isinstance(tools_result, ListToolsResult)
     assert len(tools_result.tools) == 2
-    assert tools_result.nextCursor is None
+    assert tools_result.nextCursor == msgspec.UNSET
 
 
 def test_message_handling(server: MCPServer) -> None:
@@ -453,12 +459,12 @@ def test_pagination_helper() -> None:
     # Test last page
     page_items, next_page = get_page_of_items(items, page=4, page_size=3)
     assert page_items == [9]
-    assert next_page is None
+    assert next_page == msgspec.UNSET
 
     # Test empty list
     page_items, next_page = get_page_of_items([], page=1, page_size=3)
     assert page_items == []
-    assert next_page is None
+    assert next_page == msgspec.UNSET
 
     # Test invalid page
     page_items, next_page = get_page_of_items(items, page=0, page_size=3)

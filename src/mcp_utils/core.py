@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
-from pydantic import ValidationError
+import msgspec
 
 from .queue import ResponseQueueProtocol
 from .schema import (
@@ -75,10 +75,18 @@ class MCPServer:
 
     _tools: dict[str, Callable] = field(default_factory=dict)
     _tools_list: dict[str, ToolInfo] = field(default_factory=dict)
+    _tool_arg_models: dict[str, type] = field(default_factory=dict)
 
     def register_tool(self, name: str, callable: Callable, tool_info: ToolInfo) -> None:
         self._tools_list[name] = tool_info
         self._tools[name] = callable
+        # Track arg model for validation separately from serializable ToolInfo
+        try:
+            from .utils import inspect_callable
+
+            self._tool_arg_models[name] = inspect_callable(callable).arg_model
+        except Exception:
+            pass
 
     def tool(self, name: str | None = None) -> Callable:
         """Register a tool"""
@@ -256,7 +264,7 @@ class MCPServer:
         paginated_tools, next_page = get_page_of_items(tools, page, page_size)
 
         return ListToolsResult(
-            tools=[tool.model_dump(by_alias=True) for tool in paginated_tools],
+            tools=paginated_tools,
             nextCursor=next_page,
         )
 
@@ -341,6 +349,7 @@ class MCPServer:
     def _handle_initialize(self, request: MCPRequest) -> MCPResponse:
         """Handle initialize method."""
         return MCPResponse(
+            jsonrpc="2.0",
             id=request.id,
             result=self.get_capabilities(),
         )
@@ -348,6 +357,7 @@ class MCPServer:
     def _handle_ping(self, request: MCPRequest) -> MCPResponse:
         """Handle ping method."""
         return MCPResponse(
+            jsonrpc="2.0",
             id=request.id,
             result={},
         )
@@ -358,6 +368,7 @@ class MCPServer:
         arg_name = request.params["argument"]["name"]
         value = request.params["argument"]["value"]
         return MCPResponse(
+            jsonrpc="2.0",
             id=request.id,
             result={"completion": self.get_completions(prompt_name, arg_name, value)},
         )
@@ -366,6 +377,7 @@ class MCPServer:
         """Handle prompts/list method."""
         page = int(request.params.get("cursor", "1"))
         return MCPResponse(
+            jsonrpc="2.0",
             id=request.id,
             result=self.get_list_prompts(page=page),
         )
@@ -377,6 +389,7 @@ class MCPServer:
             prompt = self._prompts[name]
         except KeyError:
             return MCPResponse(
+                jsonrpc="2.0",
                 id=request.id,
                 error=ErrorResponse(
                     code=400,
@@ -384,6 +397,7 @@ class MCPServer:
                 ),
             )
         return MCPResponse(
+            jsonrpc="2.0",
             id=request.id,
             result=prompt(**request.params["arguments"]),
         )
@@ -392,6 +406,7 @@ class MCPServer:
         """Handle tools/list method."""
         page = int(request.params.get("cursor", "1"))
         return MCPResponse(
+            jsonrpc="2.0",
             id=request.id,
             result=self.get_list_tools(page=page),
         )
@@ -400,6 +415,7 @@ class MCPServer:
         """Handle resources/list method."""
         page = int(request.params.get("cursor", "1"))
         return MCPResponse(
+            jsonrpc="2.0",
             id=request.id,
             result=self.get_list_resources(page=page),
         )
@@ -408,6 +424,7 @@ class MCPServer:
         """Handle resources/templates/list method."""
         page = int(request.params.get("cursor", "1"))
         return MCPResponse(
+            jsonrpc="2.0",
             id=request.id,
             result=self.get_list_resource_templates(page=page),
         )
@@ -419,27 +436,17 @@ class MCPServer:
 
         try:
             callable = self._tools[tool_name]
-            arg_model = self._tools_list[tool_name].arg_model
-            args = arg_model(**kwargs)
-            result = callable(**dict(args))
+            arg_model = self._tool_arg_models[tool_name]
+            args = msgspec.convert(kwargs, arg_model)
+            result = callable(**msgspec.to_builtins(args))
             if isinstance(result, dict):
                 result = CallToolResult(
-                    content=[
-                        TextContent(
-                            text=json.dumps(result),
-                            type="text",
-                        )
-                    ],
+                    content=[TextContent(text=json.dumps(result))],
                     is_error=False,
                 )
             elif isinstance(result, str):
                 result = CallToolResult(
-                    content=[
-                        TextContent(
-                            text=result,
-                            type="text",
-                        )
-                    ],
+                    content=[TextContent(text=result)],
                     is_error=False,
                 )
             elif isinstance(result, CallToolResult):
@@ -447,6 +454,7 @@ class MCPServer:
             else:
                 logger.error("Invalid tool result type: %s", type(result))
                 return MCPResponse(
+                    jsonrpc="2.0",
                     id=request.id,
                     error=ErrorResponse(
                         code=400,
@@ -454,19 +462,22 @@ class MCPServer:
                     ),
                 )
             return MCPResponse(
+                jsonrpc="2.0",
                 id=request.id,
                 result=result,
             )
         except KeyError:
             return MCPResponse(
+                jsonrpc="2.0",
                 id=request.id,
                 error=ErrorResponse(
                     code=-32601,
                     message="Tool not found",
                 ),
             )
-        except ValidationError as e:
+        except Exception as e:
             return MCPResponse(
+                jsonrpc="2.0",
                 id=request.id,
                 error=ErrorResponse(
                     code=-32602,
@@ -476,6 +487,7 @@ class MCPServer:
         except Exception as e:
             logger.error(f"Error in tool {tool_name}: {e}")
             return MCPResponse(
+                jsonrpc="2.0",
                 id=request.id,
                 error=ErrorResponse(
                     code=-32603,
@@ -501,6 +513,7 @@ class MCPServer:
             message_id = message["id"]
         except KeyError:
             return MCPResponse(
+                jsonrpc="2.0",
                 id=0,
                 error=ErrorResponse(
                     code=-32600,
@@ -508,11 +521,10 @@ class MCPServer:
                 ),
             )
         try:
-            mcp_request = MCPRequest.model_validate(
-                {**message, "session_id": session_id},
-            )
-        except ValidationError as e:
+            mcp_request = msgspec.convert({**message}, MCPRequest)
+        except Exception as e:
             return MCPResponse(
+                jsonrpc="2.0",
                 id=0,
                 error=ErrorResponse(
                     code=-32600,
@@ -545,6 +557,7 @@ class MCPServer:
             return handler(mcp_request)
         else:
             return MCPResponse(
+                jsonrpc="2.0",
                 id=message_id,
                 error=ErrorResponse(
                     code=-32601,
@@ -570,5 +583,6 @@ def get_page_of_items(
     start_idx = (page - 1) * page_size
     end_idx = start_idx + page_size
     page_items = items[start_idx:end_idx]
-    next_page = str(page + 1) if len(items) > end_idx else None
+    # Use None to indicate no next page (not UNSET) for consistency with tests
+    next_page = str(page + 1) if len(items) > end_idx else msgspec.UNSET
     return page_items, next_page
