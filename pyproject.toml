@@ -10,14 +10,6 @@ authors = [
     { name = "Fulfil.IO Inc" },
     { name = "Pioreactor Inc." },
 ]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-]
 dependencies = [
     "msgspec>=0.18.0",
 ]
