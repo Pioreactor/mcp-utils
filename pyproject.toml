@@ -1,10 +1,6 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
 [project]
 name = "mcp-utils"
-version = "1.0.0"
+version = "2.0.0"
 description = "Synchronous utilities for Model Context Protocol (MCP) integration"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,6 +8,7 @@ license = "MIT"
 keywords = ["mcp", "model-context-protocol", "ai", "llm"]
 authors = [
     { name = "Fulfil.IO Inc" },
+    { name = "Pioreactor Inc." },
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -26,30 +23,17 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/fulfilio/mcp-utils"
-Repository = "https://github.com/fulfilio/mcp-utils.git"
+Homepage = "https://github.com/pioreactor/mcp-utils"
+Repository = "https://github.com/pioreactor/mcp-utils.git"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
-    "bump-my-version>=0.15.0",
 ]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/mcp_utils"]
 
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 
-[tool.bumpversion]
-current_version = "1.0.0"
-commit = true
-tag = true
-allow_dirty = false
 
-[tool.bumpversion.file_patterns]
-pyproject = [
-    'version = "{current_version}"',
-]
