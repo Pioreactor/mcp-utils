@@ -26,7 +26,7 @@ from mcp_utils.schema import (
 )
 
 
-class TestResponseQueue(ResponseQueueProtocol):
+class DemoResponseQueue(ResponseQueueProtocol):
     """Mock response queue for testing."""
 
     def __init__(self) -> None:
@@ -58,13 +58,13 @@ class TestResponseQueue(ResponseQueueProtocol):
 
 
 @pytest.fixture
-def response_queue() -> TestResponseQueue:
+def response_queue() -> DemoResponseQueue:
     """Create a test response queue."""
-    return TestResponseQueue()
+    return DemoResponseQueue()
 
 
 @pytest.fixture
-def server(response_queue: TestResponseQueue) -> MCPServer:
+def server(response_queue: DemoResponseQueue) -> MCPServer:
     """Create a test MCP server."""
     return MCPServer(
         name="Test Server",
