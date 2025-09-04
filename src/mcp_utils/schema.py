@@ -12,6 +12,22 @@ from .utils import inspect_callable
 logger = logging.getLogger("mcp_utils")
 
 
+def build_json_schema_for_msgspec_struct(struct_type: type[Any]) -> dict[str, Any]:
+    """Return a clean JSON Schema dict for a msgspec Struct.
+    """
+    if struct_type is None:
+        return {"type": "object", "properties": {}}
+
+    (schemas,), components = msgspec.json.schema_components([struct_type])
+
+    # Try direct component by the class name for stable selection
+    name = getattr(struct_type, "__name__", None)
+    if name and name in components:
+        return components[name]
+    else:
+        raise ValueError()
+
+
 class Role(str, Enum):
     """Role in the MCP protocol."""
 
@@ -100,13 +116,13 @@ class CancelledNotification(msgspec.Struct):
 class ClientCapabilities(msgspec.Struct):
     """Capabilities a client may support."""
 
-    experimental: dict[str, dict[str, Any]] | None | msgspec.UnsetType = msgspec.UNSET
-    roots: dict[str, bool] | None | msgspec.UnsetType = msgspec.UNSET
-    sampling: dict[str, Any] | None | msgspec.UnsetType  = msgspec.UNSET
-    prompts: dict[str, bool] | None | msgspec.UnsetType = msgspec.UNSET
-    resources: dict[str, bool] | None | msgspec.UnsetType = msgspec.UNSET
-    tools: dict[str, bool] | None | msgspec.UnsetType = msgspec.UNSET
-    logging: dict[str, bool] | None | msgspec.UnsetType = msgspec.UNSET
+    experimental: dict[str, dict[str, Any]] | msgspec.UnsetType = msgspec.UNSET
+    roots: dict[str, bool] | msgspec.UnsetType = msgspec.UNSET
+    sampling: dict[str, Any] | msgspec.UnsetType  = msgspec.UNSET
+    prompts: dict[str, bool] | msgspec.UnsetType = msgspec.UNSET
+    resources: dict[str, bool] | msgspec.UnsetType = msgspec.UNSET
+    tools: dict[str, bool] | msgspec.UnsetType = msgspec.UNSET
+    logging: dict[str, bool] | msgspec.UnsetType = msgspec.UNSET
 
 
 class CompleteRequestArgument(msgspec.Struct):
@@ -203,7 +219,7 @@ class ListResourcesResult(msgspec.Struct):
     """Result of listing resources."""
 
     resources: list[ResourceInfo]
-    nextCursor: str | None | msgspec.UnsetType = msgspec.UNSET
+    nextCursor: str | msgspec.UnsetType = msgspec.UNSET
 
 
 class ResourceTemplateInfo(msgspec.Struct):
@@ -233,7 +249,7 @@ class ListResourceTemplateResult(msgspec.Struct):
     """Result of listing resource templates."""
 
     resourceTemplates: list[ResourceTemplateInfo]
-    nextCursor: str | None | msgspec.UnsetType = msgspec.UNSET
+    nextCursor: str | msgspec.UnsetType = msgspec.UNSET
 
 
 class ReadResourceRequest(msgspec.Struct):
@@ -291,7 +307,7 @@ class ListPromptsResult(msgspec.Struct):
     """Result of listing prompts."""
 
     prompts: list[PromptInfo]
-    nextCursor: str | None | msgspec.UnsetType = msgspec.UNSET
+    nextCursor: str | msgspec.UnsetType = msgspec.UNSET
 
 
 class GetPromptRequest(msgspec.Struct):
@@ -332,19 +348,17 @@ class ToolInfo(msgspec.Struct, omit_defaults=True):
     name: str
     inputSchema: dict[str, Any]
     description: str | None = None
-    arg_model: type[msgspec.Struct] | None | msgspec.UnsetType = msgspec.UNSET
+    arg_model: type[msgspec.Struct] | msgspec.UnsetType = msgspec.UNSET
 
     @classmethod
     def from_callable(cls, callable: Callable, name: str) -> "ToolInfo":
         """Create a ToolInfo from a callable."""
         metadata = inspect_callable(callable)
-        # Generate a Pydantic-like schema: root as $ref with $defs components.
-        # Also key the root definition using the tool name for stability.
 
         return cls(
             name=name,
             description=callable.__doc__ or "",
-            inputSchema=list(msgspec.json.schema_components([metadata.arg_model])[1].values())[0], # f this.
+            inputSchema=build_json_schema_for_msgspec_struct(metadata.arg_model),
         )
 
 
@@ -352,7 +366,7 @@ class ListToolsResult(msgspec.Struct):
     """Result of listing tools."""
 
     tools: list[ToolInfo]
-    nextCursor: str | None | msgspec.UnsetType = msgspec.UNSET
+    nextCursor: str | msgspec.UnsetType = msgspec.UNSET
 
 class SubscribeRequest(msgspec.Struct):
     """Request to subscribe to a resource."""
@@ -441,7 +455,7 @@ class ListRootsResult(msgspec.Struct):
     """Result of listing roots."""
 
     roots: list[RootInfo]
-    nextCursor: str | None | msgspec.UnsetType = msgspec.UNSET
+    nextCursor: str | msgspec.UnsetType = msgspec.UNSET
 
 class ErrorResponse(msgspec.Struct):
     """Error response in MCP."""
