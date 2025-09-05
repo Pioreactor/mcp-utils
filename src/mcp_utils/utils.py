@@ -1,15 +1,13 @@
 """Utility functions for MCP server implementation."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from inspect import Parameter, signature
 from typing import Any, get_type_hints
 
 import msgspec
 
 
-@dataclass
-class CallableMetadata:
+class CallableMetadata(msgspec.Struct):
     """Metadata about a callable's signature."""
 
     arg_model: type[Any]  # Msgspec Struct for arguments

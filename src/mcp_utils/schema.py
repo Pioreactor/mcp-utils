@@ -1,6 +1,5 @@
 """msgspec models for MCP (Model Context Protocol) schema."""
 
-import logging
 from collections.abc import Callable
 from enum import Enum
 from typing import Any, Literal
@@ -8,8 +7,6 @@ from typing import Any, Literal
 import msgspec
 
 from .utils import inspect_callable
-
-logger = logging.getLogger("mcp_utils")
 
 
 def build_json_schema_for_msgspec_struct(struct_type: type[Any]) -> dict[str, Any]:
@@ -188,6 +185,7 @@ class InitializeResult(msgspec.Struct):
     protocolVersion: str
     capabilities: ClientCapabilities
     serverInfo: ServerInfo
+    instructions: str | msgspec.UnsetType = msgspec.UNSET
 
 
 class ListResourcesRequest(msgspec.Struct):

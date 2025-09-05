@@ -6,7 +6,6 @@ import json
 import logging
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
 import msgspec
@@ -37,45 +36,43 @@ logger = logging.getLogger("mcp_utils")
 PAGE_SIZE = 50
 
 
-@dataclass
 class MCPServer:
     """Base MCP Server implementation"""
 
-    name: str
-    version: str
+    def __init__(
+        self,
+        name: str,
+        version: str,
+        response_queue: ResponseQueueProtocol,
+        instructions: str = "",
+        protocol_version: str = "2025-06-18",
+    ) -> None:
+        # Basic info
+        self.name: str = name
+        self.version: str = version
+        self.instructions: str = instructions
 
-    # The response queue is used to store responses
-    # that are sent to the client via SSE.
-    response_queue: ResponseQueueProtocol
+        # The response queue is used to store responses
+        # that are sent to the client via SSE.
+        self.response_queue: ResponseQueueProtocol = response_queue
 
-    # When the client send an `initialize` request, it
-    # sends the highest version it can support. The server
-    # is expected to respond with the latest version supported
-    # by the server.
-    # The client is responsible to disconnect if the version is
-    # not supported.
-    # https://spec.modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle/#version-negotiation
-    protocol_version: str = "2025-06-18"
+        # Protocol version negotiation (see MCP spec)
+        self.protocol_version: str = protocol_version
 
-    # server capabilities can be:
-    # - prompts
-    # - resources
-    # - tools
-    # - logging
-    # - experimental
-    _prompts: dict[str, Callable] = field(default_factory=dict)
-    _prompts_list: dict[str, PromptInfo] = field(default_factory=dict)
-    _prompt_completions: dict[str, dict[str, Callable]] = field(default_factory=dict)
+        # Server capabilities registries
+        self._prompts: dict[str, Callable] = {}
+        self._prompts_list: dict[str, PromptInfo] = {}
+        self._prompt_completions: dict[str, dict[str, Callable]] = {}
 
-    _resources: dict[str, Callable] = field(default_factory=dict)
-    _resources_list: dict[str, ResourceInfo] = field(default_factory=dict)
+        self._resources: dict[str, Callable] = {}
+        self._resources_list: dict[str, ResourceInfo] = {}
 
-    _resource_templates: dict[str, Callable] = field(default_factory=dict)
-    _resource_template_list: dict[str, ResourceInfo] = field(default_factory=dict)
+        self._resource_templates: dict[str, Callable] = {}
+        self._resource_template_list: dict[str, ResourceInfo] = {}
 
-    _tools: dict[str, Callable] = field(default_factory=dict)
-    _tools_list: dict[str, ToolInfo] = field(default_factory=dict)
-    _tool_arg_models: dict[str, type] = field(default_factory=dict)
+        self._tools: dict[str, Callable] = {}
+        self._tools_list: dict[str, ToolInfo] = {}
+        self._tool_arg_models: dict[str, type] = {}
 
     def register_tool(self, name: str, callable: Callable, tool_info: ToolInfo) -> None:
         self._tools_list[name] = tool_info
@@ -248,6 +245,7 @@ class MCPServer:
                 resources={"subscribe": False, "listChanged": False},
                 tools={"listChanged": False},
             ),
+            instructions=self.instructions,
             protocolVersion=self.protocol_version,
             serverInfo=ServerInfo(name=self.name, version=self.version),
         )
