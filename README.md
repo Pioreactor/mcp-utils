@@ -23,7 +23,17 @@ A Python utility package for building Model Context Protocol (MCP) servers.
 
 ## Installation
 
-Install from this repo
+Install from PyPI:
+
+```bash
+pip install mcp-utils-msgspec
+```
+
+For development (from source):
+
+```bash
+pip install -e .[dev]
+```
 
 ## Requirements
 

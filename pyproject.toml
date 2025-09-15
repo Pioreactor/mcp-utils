@@ -1,6 +1,6 @@
 [project]
-name = "mcp-utils"
-version = "2.0.1"
+name = "mcp-utils-msgspec"
+version = "2.1.0"
 description = "Synchronous utilities for Model Context Protocol (MCP) integration"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -29,3 +29,12 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 
 
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
